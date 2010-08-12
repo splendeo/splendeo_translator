@@ -1,14 +1,14 @@
 # -*- encoding: utf-8 -*-
 
 Gem::Specification.new do |s|
-  s.name = %q{translator}
+  s.name = %q{splendeo_translator}
   s.version = "1.0.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Mike Champion"]
-  s.date = %q{2009-04-17}
+  s.authors = ["Mike Champion", "Enrique García"]
+  s.date = %q{2010-08-12}
   s.description = %q{Translator makes using Rails internationalization simpler}
-  s.email = %q{mike@graysky.org}
+  s.email = %q{egarcia@splendeo.es}
   s.extra_rdoc_files = [
     "README.rdoc"
   ]
@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
     "README.rdoc",
     "Rakefile",
     "VERSION.yml",
-    "lib/translator.rb",
+    "lib/splendeo_translator.rb",
     "test/fixtures/app/controllers/blog_posts_controller.rb",
     "test/fixtures/app/helpers/blog_posts_helper.rb",
     "test/fixtures/app/models/blog_comment_mailer.rb",
@@ -36,7 +36,7 @@ Gem::Specification.new do |s|
     "test/translator_test.rb"
   ]
   s.has_rdoc = true
-  s.homepage = %q{http://github.com/graysky/translator}
+  s.homepage = %q{http://github.com/splendeo/splendeo_translator}
   s.rdoc_options = ["--charset=UTF-8"]
   s.require_paths = ["lib"]
   s.rubygems_version = %q{1.3.1}

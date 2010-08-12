@@ -3,12 +3,12 @@ require 'action_view/helpers/translation_helper'
 
 # Extentions to make internationalization (i18n) of a Rails application simpler. 
 # Support the method +translate+ (or shorter +t+) in models/view/controllers/mailers.
-module Translator
-  # Error for use within Translator
-  class TranslatorError < StandardError #:nodoc:
+module SplendeoTranslator
+  # Error for use within SplendeoTranslator
+  class SplendeoTranslatorError < StandardError #:nodoc:
   end
   
-  # Translator version
+  # SplendeoTranslator version
   VERSION = '1.0.0'
   
   # Whether strict mode is enabled
@@ -16,6 +16,9 @@ module Translator
   
   # Whether to fallback from the set locale to the default locale
   @@fallback_mode = false
+  
+  # Whether to show the raw key if the locale doesn't provide a translation
+  @@key_fallback_mode = false
   
   # Whether to pseudo-translate all fetched strings
   @@pseudo_translate = false
@@ -42,7 +45,7 @@ module Translator
   # Block takes two required parameters:
   # - exception (original I18n::MissingTranslationData that was raised for the failed translation)
   # - key (key that was missing)
-  # - options (hash of options sent to translator)
+  # - options (hash of options sent to SplendeoTranslator)
   # Example:
   #   set_missing_translation_callback do |ex, key, options|
   #     logger.info("Failed to find #{key}")
@@ -74,7 +77,7 @@ module Translator
     scope ||= [] # guard against nil scope
     
     # Let Rails 2.3 handle keys starting with "."
-    raise TranslatorError, "Skip keys with leading dot" if key.to_s.first == "."
+    raise SplendeoTranslatorError, "Skip keys with leading dot" if key.to_s.first == "."
     
     # Keep the original options clean
     original_scope = scope.dup
@@ -105,29 +108,32 @@ module Translator
       end
     end
 
+    # return the key itself if translator is on key_fallback mode
+    str ||= key if SplendeoTranslator.key_fallback?
+    
     # If a string is not yet found, potentially check the default locale if in fallback mode.
-    if str.nil? && Translator.fallback? && (I18n.locale != I18n.default_locale) && options[:locale].nil?
+    if str.nil? && SplendeoTranslator.fallback? && (I18n.locale != I18n.default_locale) && options[:locale].nil?
       # Recurse original request, but in the context of the default locale
-      str ||= Translator.translate_with_scope(original_scope, key, options.merge({:locale => I18n.default_locale}))
+      str ||= SplendeoTranslator.translate_with_scope(original_scope, key, options.merge({:locale => I18n.default_locale}))
     end
     
     # If a string was still not found, fall back to trying original request (gets default behavior)
     str ||= I18n.translate(key, options)
     
     # If pseudo-translating, prepend / append marker text
-    if Translator.pseudo_translate? && !str.nil?
-      str = Translator.pseudo_prepend + str + Translator.pseudo_append
+    if SplendeoTranslator.pseudo_translate? && !str.nil?
+      str = SplendeoTranslator.pseudo_prepend + str + SplendeoTranslator.pseudo_append
     end
     
     str
   end
   
-  class << Translator
+  class << SplendeoTranslator
     
     # Generic translate method that mimics <tt>I18n.translate</tt> (e.g. no automatic scoping) but includes locale fallback
     # and strict mode behavior.
     def translate(key, options={})
-      Translator.translate_with_scope([], key, options)
+      SplendeoTranslator.translate_with_scope([], key, options)
     end
     
     alias :t :translate
@@ -145,6 +151,17 @@ module Translator
   # If fallback mode is enabled
   def self.fallback?
     @@fallback_mode
+  end
+  
+  # When key_fallback mode is enabled, if a key cannot be found in the set locale,
+  # it will return the key
+  def self.key_fallback(enable = true)
+    @@key_fallback_mode = enable
+  end
+  
+  # If key_fallback mode is enabled
+  def self.key_fallback?
+    @@key_fallback_mode
   end
   
   # Toggle whether to true an exception on *all* +MissingTranslationData+ exceptions
@@ -217,7 +234,7 @@ module Translator
     def assert_translated(msg = nil, &block)
       
       # Enable strict mode to force raising of MissingTranslationData
-      Translator.strict_mode(true)
+      SplendeoTranslator.strict_mode(true)
       
       msg ||= "Expected no missing translation keys"
       
@@ -230,7 +247,7 @@ module Translator
         assert_block(build_message(msg, "Exception raised:\n?", e)) {false}
       ensure
         # uninstall strict exception handler
-        Translator.strict_mode(false)
+        SplendeoTranslator.strict_mode(false)
       end
         
     end
@@ -273,8 +290,8 @@ module ActionView #:nodoc:
       # In the case of a missing translation, fall back to letting TranslationHelper
       # put in span tag for a translation_missing.
       begin
-        Translator.translate_with_scope(scope, key, options.merge({:raise => true}))
-      rescue Translator::TranslatorError, I18n::MissingTranslationData => exc
+        SplendeoTranslator.translate_with_scope(scope, key, options.merge({:raise => true}))
+      rescue SplendeoTranslator::SplendeoTranslatorError, I18n::MissingTranslationData => exc
         # Call the original translate method
         str = translate_without_context(key, options)
         
@@ -283,10 +300,10 @@ module ActionView #:nodoc:
         # <span class="translation_missing">en, missing_string</span>
         if str =~ /span class\=\"translation_missing\"/
           # In strict mode, do not allow TranslationHelper to add "translation missing"
-          raise if Translator.strict_mode?
+          raise if SplendeoTranslator.strict_mode?
           
           # Invoke callback if it is defined
-          Translator.missing_translation_callback(exc, key, options)
+          SplendeoTranslator.missing_translation_callback(exc, key, options)
         end
 
         str
@@ -305,7 +322,7 @@ module ActionController #:nodoc:
     # is being invoked. Initial scoping will be [:controller_name :action_name] when looking up keys. Example would be
     # +['posts' 'show']+ for the +PostsController+ and +show+ action.
     def translate_with_context(key, options={})
-      Translator.translate_with_scope([self.controller_name, self.action_name], key, options)
+      SplendeoTranslator.translate_with_scope([self.controller_name, self.action_name], key, options)
     end
   
     alias_method_chain :translate, :context
@@ -318,7 +335,7 @@ module ActiveRecord #:nodoc:
     # Add a +translate+ (or +t+) method to ActiveRecord that is context-aware of what model is being invoked. 
     # Initial scoping of [:model_name] where model name is like 'blog_post' (singular - *not* the table name) 
     def translate(key, options={})
-      Translator.translate_with_scope([self.class.name.underscore], key, options)
+      SplendeoTranslator.translate_with_scope([self.class.name.underscore], key, options)
     end
   
     alias :t :translate  
@@ -327,7 +344,7 @@ module ActiveRecord #:nodoc:
     class << Base
     
       def translate(key, options={}) #:nodoc:
-        Translator.translate_with_scope([self.name.underscore], key, options)
+        SplendeoTranslator.translate_with_scope([self.name.underscore], key, options)
       end
     
       alias :t :translate
@@ -342,7 +359,7 @@ module ActionMailer #:nodoc:
     # is being invoked. Initial scoping of [:mailer_name :action_name] where mailer_name is like 'comment_mailer' 
     # and action_name is 'comment_notification' (note: no "deliver_" or "create_")
     def translate(key, options={})
-      Translator.translate_with_scope([self.mailer_name, self.action_name], key, options)
+      SplendeoTranslator.translate_with_scope([self.mailer_name, self.action_name], key, options)
     end
 
     alias :t :translate
@@ -351,18 +368,18 @@ end
 
 module I18n
   # Install the strict exception handler for testing
-  extend Translator::I18nExtensions
+  extend SplendeoTranslator::I18nExtensions
 end
 
 module Test # :nodoc: all
   module Unit
     class TestCase
-      include Translator::Assertions
+      include SplendeoTranslator::Assertions
     end
   end
 end
 
 # In test environment, enable strict exception handling for missing translations
 if (defined? RAILS_ENV) && (RAILS_ENV == "test")
-  Translator.strict_mode(true)
+  SplendeoTranslator.strict_mode(true)
 end

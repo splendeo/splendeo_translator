@@ -1,1 +1,1 @@
-require 'translator'
+require 'splendeo_translator'
